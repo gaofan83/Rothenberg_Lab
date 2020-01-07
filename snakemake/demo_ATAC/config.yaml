@@ -1,0 +1,19 @@
+#bowtie
+RUNBOWTIE: /home/fgao/software/bowtie2-2.3.5.1-linux-x86_64/bowtie2
+#bowtie index
+BOWTIEINDEX: /home/fgao/reference/Mus_musculus/UCSC/mm10/Sequence/Bowtie2Index/genome
+#threads
+THREAD: 8
+#length of trimmed sequences
+TRIM: 40
+#trimming program
+SEQTK: /home/fgao/software/seqtk/seqtk
+#SAMTOOLS
+RUNSAMTOOLS: /home/fgao/software/samtools-1.9/samtools
+#HOMERTAG
+HOMERTAG: /home/fgao/software/homer/bin/makeTagDirectory
+##HOMERTRACK
+HOMERTRACK: /home/fgao/software/homer/bin/makeUCSCfile
+##HOMERPEAK
+HOMERPEAK: /home/fgao/software/homer/bin/findPeaks
+

@@ -1,0 +1,3 @@
+/home/fgao/.local/bin/macs2 callpeak -t alignment/SRR5183624.sort.bam alignment/SRR5183625.sort.bam \
+        -c alignment/SRR5183634.sort.bam alignment/SRR5183635.sort.bam \
+	-f BAM -g mm -n macs2_peaks -B

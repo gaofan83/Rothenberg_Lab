@@ -1,0 +1,2 @@
+snakemake -s Snakefile_ATACseq_paired --cores 8
+

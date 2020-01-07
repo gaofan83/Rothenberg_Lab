@@ -1,0 +1,9 @@
+sample	group path
+S1	G1	kallisto_170302Leh_D17-2578-2_NA_sequence/abundance.h5
+S2	G1	kallisto_170302Leh_D17-2578-3_NA_sequence/abundance.h5
+S3	G1	kallisto_170302Leh_D17-2579-2_NA_sequence/abundance.h5
+S4	G1	kallisto_170302Leh_D17-2579-3_NA_sequence/abundance.h5
+S5	G2	kallisto_170302Leh_D17-2590-2_NA_sequence/abundance.h5
+S6	G2	kallisto_170302Leh_D17-2590-3_NA_sequence/abundance.h5
+S7	G2	kallisto_170302Leh_D17-2591-2_NA_sequence/abundance.h5
+S8	G2	kallisto_170302Leh_D17-2591-3_NA_sequence/abundance.h5

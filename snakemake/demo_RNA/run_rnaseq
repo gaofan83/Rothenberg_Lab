@@ -1,0 +1,4 @@
+snakemake -s Snakefile_RNAseq_kallisto --cores 8
+Rscript --vanilla sleuth.R
+Rscript --vanilla sleuth2.R
+

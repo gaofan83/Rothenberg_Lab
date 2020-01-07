@@ -1,0 +1,74 @@
+from os.path import join
+configfile: "config.yaml"
+fastqc=config["RUNQC"]
+trimmomatic=config["RUNTRIM"]
+adaptorseq=config["ADAPTORSEQ"]
+kallisto=config["RUNKALLISTO"]
+kallistoindex=config["KALLISTOINDEX"]
+threads=config["THREADS"]
+
+import subprocess
+subprocess.call('echo "Sample" > fastq/data_ID.txt', shell=True)
+subprocess.call('ls fastq/*fastq.gz | xargs -n 1 basename >> fastq/data_ID.txt', shell=True)
+subprocess.call("sed -i 's/.fastq.gz//g' fastq/data_ID.txt", shell=True)
+
+import pandas as pd
+from pathlib import Path
+df = pd.read_csv('fastq/data_ID.txt', sep='\t', index_col='Sample')
+SAMPLES = df.index
+
+NB_SAMPLES = len(SAMPLES)
+
+for sample in SAMPLES:
+  print("Sample " + sample + " will be processed")
+
+rule all:
+    input:
+        expand("log/kallisto_{sample}.txt", sample=SAMPLES)
+    output:
+        "log/final.txt"
+    shell:
+        """
+         echo "RNAseq alignment is complete" > {output}
+        """
+
+rule run_fastqc:
+    input:
+        fastqc,
+        "fastq/{sample}.fastq.gz"
+    output:
+        "log/fastqc_{sample}.txt"
+    shell:
+        """
+         mkdir -p fastqc
+         {input[0]} {input[1]} -o fastqc
+         echo "FASTQC is complete" > {output}
+        """
+
+rule run_trim:
+    input:
+        "log/fastqc_{sample}.txt"
+    output:
+        "log/trim_{sample}.txt"
+    params:
+        sample="{sample}"
+    shell:
+        """
+         java -jar {trimmomatic} SE -threads {threads} -phred33 fastq/{params.sample}.fastq.gz fastq/{params.sample}.trimmed.fastq.gz \
+             ILLUMINACLIP:{adaptorseq}:2:30:10 SLIDINGWINDOW:4:15 LEADING:3 TRAILING:3 MINLEN:36
+         echo "Data trimming is complete" > {output}
+        """
+
+rule run_kallisto:
+    input:
+        "log/trim_{sample}.txt"
+    output:
+        "log/kallisto_{sample}.txt"
+    params:
+        sample="{sample}"
+    shell:
+        """
+         {kallisto} quant --single -l 200 -s 20 -i {kallistoindex} -b 100 -t {threads} -o kallisto_{params.sample} fastq/{params.sample}.trimmed.fastq.gz
+         echo "Kallisto is complete" > {output}
+        """
+

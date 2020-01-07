@@ -1,0 +1,1 @@
+snakemake -s Snakefile_CHIPseq_bowtie --cores 8

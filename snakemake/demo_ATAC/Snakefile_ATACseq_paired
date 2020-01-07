@@ -1,0 +1,92 @@
+from os.path import join
+configfile: "config.yaml"
+bowtie=config["RUNBOWTIE"]
+bowtieindex=config["BOWTIEINDEX"]
+thread=config["THREAD"]
+trim_length=config["TRIM"]
+seqtktrim=config["SEQTK"]
+samtools=config["RUNSAMTOOLS"]
+homermaketag=config["HOMERTAG"]
+homertracks=config["HOMERTRACK"]
+homerpeak=config["HOMERPEAK"]
+
+import subprocess
+subprocess.call('echo "Sample" > fastq/data_ID.txt', shell=True)
+subprocess.call('ls fastq/*_1.fastq.gz | xargs -n 1 basename >> fastq/data_ID.txt', shell=True)
+subprocess.call("sed -i 's/_1.fastq.gz//g' fastq/data_ID.txt", shell=True)
+subprocess.call('mkdir -p fastq_trim', shell=True)
+
+import pandas as pd
+from pathlib import Path
+df = pd.read_csv('fastq/data_ID.txt', sep='\t', index_col='Sample')
+ID = df.index
+
+
+for sample in ID:
+  print("Sample " + sample + " will be processed")
+
+rule all:
+    input:
+        expand("log/homer_{sample}.txt", sample=ID)
+
+rule run_trim:
+    input:
+        "fastq/{sample}_1.fastq.gz",
+        "fastq/{sample}_2.fastq.gz"
+    output:
+        "fastq_trim/{sample}_1.trim.fastq.gz",
+        "fastq_trim/{sample}_2.trim.fastq.gz"
+    shell:
+        """
+         {seqtktrim} trimfq -L {trim_length} {input[0]} | gzip > {output[0]}
+         {seqtktrim} trimfq -L {trim_length} {input[1]} | gzip > {output[1]}
+        """
+
+rule run_bowtie:
+    input:
+        "fastq_trim/{sample}_1.trim.fastq.gz",
+        "fastq_trim/{sample}_2.trim.fastq.gz"
+    output:
+        "alignment/{sample}.sam"
+    shell:
+        """
+         {bowtie} -x {bowtieindex} -1 {input[0]} -2 {input[1]} -S {output} \
+           --end-to-end --very-sensitive --no-mixed --no-discordant -q --phred33 -I 10 -X 700 -p {thread}
+        """
+
+rule run_bam:
+    input:
+        "alignment/{sample}.sam"
+    output:
+        "log/atac_{sample}.txt"
+    params:
+        sample="{sample}"
+    shell:
+        """
+         {samtools} view -bS {input} > alignment/{params.sample}.bam
+         {samtools} sort alignment/{params.sample}.bam > alignment/{params.sample}.sort.bam
+         {samtools} index alignment/{params.sample}.sort.bam
+         {samtools} rmdup alignment/{params.sample}.sort.bam alignment/{params.sample}.rmdup.bam
+         {samtools} index alignment/{params.sample}.rmdup.bam
+         {samtools} view -h alignment/{params.sample}.rmdup.bam | awk '{{if($3 != "chrM") print $0}}' | {samtools} view -Sb - > alignment/{params.sample}.rmdup_noMT.bam
+         {samtools} index alignment/{params.sample}.rmdup_noMT.bam
+         {samtools} sort -n alignment/{params.sample}.rmdup_noMT.bam -o alignment/{params.sample}.rmdup_noMT.sortn.bam
+         echo "ATACseq read alignment is complete" > {output}
+        """
+
+rule run_homer:
+    input:
+        "log/atac_{sample}.txt"
+    output:
+        "log/homer_{sample}.txt"
+    params:
+        sample="{sample}"
+    shell:
+        """
+         mkdir -p homer
+         {homermaketag} homer/{params.sample} alignment/{params.sample}.rmdup_noMT.bam
+         {homertracks} homer/{params.sample} -o auto
+         {homerpeak} homer/{params.sample} -o homer/peaks_homer_{params.sample}_fdr0.001.txt -localSize 50000 -size 150 -minDist 50 -fragLength 0 -fdr 0.001
+         echo "HOMER is complete" > {output}
+        """
+

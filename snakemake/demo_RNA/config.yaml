@@ -1,0 +1,12 @@
+#FASTQC
+RUNQC: /home/fgao/software/FastQC/fastqc
+#TRIMMOMATIC
+RUNTRIM: /home/fgao/software/Trimmomatic-0.38/trimmomatic-0.38.jar
+#ADAPTOR
+ADAPTORSEQ: /home/fgao/software/Trimmomatic-0.38/adapters/TruSeq3-SE.fa
+#KALLISTO
+RUNKALLISTO: /home/fgao/software/kallisto/kallisto
+#KALLISTO INDEX
+KALLISTOINDEX: /home/fgao/reference/Mus_musculus/kallisto_index/Mus_musculus.GRCm38.cdna.all.fa.ki
+#threads
+THREADS: 8

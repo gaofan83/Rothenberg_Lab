@@ -1,0 +1,3 @@
+/home/fgao/software/Genrich/Genrich -t \
+      alignment/SRR3595211.rmdup_noMT.sortn.bam,alignment/SRR3595212.rmdup_noMT.sortn.bam,alignment/SRR3595213.rmdup_noMT.sortn.bam,alignment/SRR3595214.rmdup_noMT.sortn.bam \
+      -o genrich.narrowPeak -f genrich.log -v

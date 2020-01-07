@@ -1,0 +1,115 @@
+from os.path import join
+configfile: "config.yaml"
+fastqc=config["RUNQC"]
+trimmomatic=config["RUNTRIM"]
+adaptorseq=config["ADAPTORSEQ"]
+bowtie=config["RUNBOWTIE"]
+threads=config["THREADS"]
+bowtieindex=config["BOWTIEINDEX"]
+bedgraph=config["RUNBEDGRAPH"]
+samtools=config["RUNSAMTOOLS"]
+homermaketag=config["HOMERTAG"]
+homertracks=config["HOMERTRACK"]
+homerpeak=config["HOMERPEAK"]
+
+import subprocess
+subprocess.call('echo "Sample" > fastq/data_ID.txt', shell=True)
+subprocess.call('ls fastq/*fastq.gz | xargs -n 1 basename >> fastq/data_ID.txt', shell=True)
+subprocess.call("sed -i 's/.fastq.gz//g' fastq/data_ID.txt", shell=True)
+
+import pandas as pd
+from pathlib import Path
+df = pd.read_csv('fastq/data_ID.txt', sep='\t', index_col='Sample')
+SAMPLES = df.index
+
+NB_SAMPLES = len(SAMPLES)
+
+for sample in SAMPLES:
+  print("Sample " + sample + " will be processed")
+
+rule all:
+    input:
+        expand("log/homer_{sample}.txt", sample=SAMPLES)
+    output:
+        "log/final.txt"
+    shell:
+        """
+         echo "CHIPSeq alignment is complete" > {output}
+        """
+
+rule run_fastqc:
+    input:
+        fastqc,
+        "fastq/{sample}.fastq.gz"
+    output:
+        "log/fastqc_{sample}.txt"
+    shell:
+        """
+         mkdir -p fastqc
+         {input[0]} {input[1]} -o fastqc
+         echo "FASTQC is complete" > {output}
+        """
+
+rule run_trim:
+    input:
+        "log/fastqc_{sample}.txt"
+    output:
+        "log/trim_{sample}.txt"
+    params:
+        sample="{sample}"
+    shell:
+        """
+         mkdir -p fastq_trim
+         java -jar {trimmomatic} SE -threads {threads} -phred33 fastq/{params.sample}.fastq.gz fastq_trim/{params.sample}.trimmed.fastq.gz \
+             ILLUMINACLIP:{adaptorseq}:2:30:10 SLIDINGWINDOW:4:15 LEADING:3 TRAILING:3 MINLEN:36
+         echo "Data trimming is complete" > {output}
+        """
+
+rule run_bowtie:
+    input:
+        "log/trim_{sample}.txt"
+    output:
+        "log/bowtie_{sample}.txt"
+    params:
+        sample="{sample}"
+    shell:
+        """
+         mkdir -p alignment
+         {bowtie} -x {bowtieindex} -U fastq_trim/{params.sample}.trimmed.fastq.gz -S alignment/{params.sample}.sam -p {threads} 
+         echo "BOWTIE2 is complete" > {output}
+        """
+
+rule run_bedtools:
+    input:
+        "log/bowtie_{sample}.txt"
+    output:
+        "log/bedgraph_{sample}.txt"
+    params:
+        sample="{sample}"
+    shell:
+        """
+         {samtools} view -bS alignment/{params.sample}.sam > alignment/{params.sample}.bam
+         {samtools} sort alignment/{params.sample}.bam > alignment/{params.sample}.sort.bam
+         {samtools} index alignment/{params.sample}.sort.bam
+         {samtools} rmdup -s alignment/{params.sample}.sort.bam alignment/{params.sample}.rmdup.bam
+         {samtools} index alignment/{params.sample}.rmdup.bam
+         {bedgraph} -ibam alignment/{params.sample}.rmdup.bam -bg > alignment/{params.sample}.bedgraph
+         echo "BEDGRAPH is complete" > {output}
+        """
+
+rule run_homer:
+    input:
+        "log/bedgraph_{sample}.txt"
+    output:
+        "log/homer_{sample}.txt"
+    params:
+        sample="{sample}"
+    shell:
+        """
+         mkdir -p homer
+         {homermaketag} homer/{params.sample} alignment/{params.sample}.rmdup.bam
+         {homertracks} homer/{params.sample} -o auto
+         {homerpeak} homer/{params.sample} -o homer/peaks_homer_{params.sample}_fdr0.001.txt -localSize 50000 -size 150 -minDist 50 -fragLength 0 -fdr 0.001
+         echo "HOMER is complete" > {output}
+        """
+
