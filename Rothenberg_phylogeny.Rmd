@@ -1,0 +1,41 @@
+---
+title: "R Notebook, Xun's RNA-seq data"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+
+#make phylogenetic tree based on bulk RNA-seq data
+```{r}
+fpkm<-read.table("/home/fgao/Data_RNA/Rothenberg_Lab/volvox02/cuffnorm_out/genes.fpkm_table",header=T, row.names=1)
+
+fpkm_exp<-fpkm[rowSums(fpkm == 0) == 0,]
+fpkm_mean<-fpkm[rowMeans(fpkm)>0.01,]
+
+fpkm_ave<-data.frame(early_EV=rowMeans(fpkm[,c(1:2)]), early_ID2=rowMeans(fpkm[,c(3:4)]), early_LL=rowMeans(fpkm[,c(5:6)]),
+                     early_LMO2=rowMeans(fpkm[,c(7:8)]), early_LP=rowMeans(fpkm[,c(9:10)]), early_Lyl1=rowMeans(fpkm[,c(11:12)]),
+                     early_PLL=rowMeans(fpkm[,c(13:14)]), early_PU1=rowMeans(fpkm[,c(15:16)]), late_EV=rowMeans(fpkm[,c(17:18)]),
+                     late_ID2=rowMeans(fpkm[,c(19:20)]), late_LL=rowMeans(fpkm[,c(21:22)]), late_LMO2=rowMeans(fpkm[,c(23:24)]),
+                     late_LP=rowMeans(fpkm[,c(25:26)]), late_Lyl1=rowMeans(fpkm[,c(27:28)]), late_PU1=rowMeans(fpkm[,c(29:30)])
+                    )
+
+fpkm_ave_exp<-fpkm_ave[rowMeans(fpkm_ave)>0.01,]
+
+fpkm_sel<-log10(fpkm_ave_exp + 1)
+fpkm_t<-t(fpkm_sel)
+#dd<-dist(scale(fpkm_t),method="euclidean")
+dd<-dist(fpkm_t,method="euclidean")
+hc<-hclust(dd,method="ward.D2")
+
+library("ape")
+#plot(as.phylo(hc), type="cladogram", cex = 0.6, label.offset = 0.5)
+#plot(as.phylo(hc), cex = 0.6, label.offset = 0.5)
+
+plot(as.phylo(hc), type = "unrooted", cex = 0.01, no.margin = FALSE, main="phylogenetic tree based on RNA-seq data", cex.main=0.8)
+tiplabels(colnames(fpkm_sel), frame="none", cex=0.8, col="black", bg="white", font=1)
+
+```
+

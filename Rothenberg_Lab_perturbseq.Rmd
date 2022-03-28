@@ -1,0 +1,388 @@
+---
+title: "single-cell perturb-seq guide RNAseq Notebook"
+output: html_notebook
+---
+
+
+
+```{r}
+setwd("/home/fgao/Data_single_cell/Rothenberg_Lab/perturb_data/ft_gRNA/outs/crispr_analysis/")
+bc<-read.csv("../filtered_feature_bc_matrix/barcodes.tsv",header=F)
+feature<-read.csv("feature_reference.csv", header=T)
+protospacer<-read.csv("protospacer_calls_per_cell.csv", header=T)
+umi_table<-matrix(ncol=nrow(feature), nrow=nrow(bc),0)
+colnames(umi_table)<-feature$id
+rownames(umi_table)<-bc$V1
+for (i in 1:nrow(protospacer)) {
+        feature_ele<-unlist(strsplit(toString(protospacer$feature_call[i]), '|', fixed=TRUE));
+        count_ele<-unlist(strsplit(toString(protospacer$num_umis[i]), '|', fixed=TRUE));
+        for (j in 1:protospacer$num_features[i]) {
+                umi_table[protospacer$cell_barcode[i], feature_ele[j]] <- count_ele[j];
+        }
+}
+write.table(umi_table, file="protospacer_umi.txt", quote=F,  sep="\t", col.names=NA, row.names=TRUE)
+
+```
+
+
+# plots of guide1 results
+
+```{r}
+setwd("/home/fgao/Data_single_cell/Rothenberg_Lab/perturb_data/ft_gRNA/outs/crispr_analysis/")
+umi_cellranger<-read.table("protospacer_umi.txt", header=T, row.names=1)
+rownames(umi_cellranger)<-substring(rownames(umi_cellranger), 1,16)
+umi_inhouse<-read.table("../../../guiderna/ft_count_cap1_gd1_id_convert.txt", header=T, row.names=1)
+
+umi_cellranger_order <- umi_cellranger[order(row.names(umi_cellranger)), ]
+umi_inhouse_order <- umi_inhouse[order(row.names(umi_inhouse)), ]
+
+mycorr<-cor(umi_cellranger_order[,c(1:23)], umi_inhouse_order[,c(1:23)])
+
+library(gplots)
+my_palette <- colorRampPalette(c("green", "yellow", "red"))(n = 99)
+col_breaks = seq(0,1,length=100)
+
+library(dplyr)
+library(tidyr)
+library(plotly)
+
+
+#png("/home/fgao/Data_single_cell/Rothenberg_Lab/perturb_data/ft_gRNA/outs/crispr_analysis/heatmap_umi_corr.png")
+plot_ly(x = colnames(mycorr), y = rownames(mycorr), z = mycorr, type = "heatmap") %>% layout(title = "Pearson's Correlation of UMI counts", xaxis = list(title = 'guiderna_tool'), yaxis = list(title = "cellranger"))
+#dev.off()
+#ggplot2::ggsave(filename = "heatmap_umi_corr.png", plot = plot_heatmap, width=18, height=18)
+
+
+umi_cellranger_trans <- data.frame(umi_cellranger_order[,1:23]) %>% gather(variable, value)
+umi_inhouse_trans <- data.frame(umi_inhouse_order[,1:23]) %>% gather(variable, value)
+umi_trans <- cbind(umi_cellranger_trans, umi_inhouse_trans)
+colnames(umi_trans) <- c("guide_cellranger","umi_cellranger","guide_guiderna_tool","umi_guiderna_tool")
+umi_trans_nonzero <- umi_trans[umi_trans$umi_cellranger>0 | umi_trans$umi_guiderna_tool>0, ]
+
+ggplot(umi_trans_nonzero, aes(x=umi_guiderna_tool, y=umi_cellranger) ) +
+  geom_bin2d(bins = 100) +
+  scale_fill_continuous(type = "viridis") +
+  theme_bw() + ggtitle(paste("Correlation of individual guide UMIs at single-cell level (pearson's r = ", formatC(cor(umi_trans_nonzero$umi_cellranger, umi_trans_nonzero$umi_guiderna_tool),format='f',digits=3), ")", sep=""))
+
+
+```
+
+
+#Statistics
+
+```{r}
+library(MASS)
+library(mclust, quietly=TRUE)
+library(sBIC)
+
+feature_binary<-function(ft_count){
+  ft_count_log<-log10(ft_count + 1)
+  ft_count_binary<-ft_count
+    for (i in 1:ncol(ft_count)) {
+      if(sum(ft_count[,i])>=1){
+        fit <- Mclust(ft_count_log[,i], G=2)
+        fit$parameters
+        ft_count_binary[,i]<-fit$classification
+
+      } else {ft_count_binary[,i] = rep(0,nrow(ft_count_log))}
+      
+    }
+    ft_count_binary[ft_count_binary==1] <- 0
+    ft_count_binary[ft_count_binary==2] <- 1
+    return(ft_count_binary)
+}
+
+umi_cellranger_bin <- feature_binary(umi_cellranger_order[,c(1:23)])
+umi_inhouse_bin <- feature_binary(umi_inhouse_order)
+
+s1<-seq(1,21,3)
+s2<-s1+1
+s3<-s1+2
+
+umi_cellranger_gene <- umi_cellranger_bin[,s1] + umi_cellranger_bin[,s2] + umi_cellranger_bin[,s3]
+colnames(umi_cellranger_gene)<-c("Bcl11a", "Gata3", "Hoxa9", "Meis1", "Spi1", "Tcf7", "Erg")
+par(mfrow=c(2,4))
+
+for (i in 1:length(s1)) {
+  barplot(table(umi_cellranger_gene[,i]), main=colnames(umi_cellranger_gene)[i], xlab="gRNA sites per cell", ylab="cell number", log="y")
+}
+mtext("gRNA gene target sites analysis (cellranger, g1)", outer = TRUE)
+
+
+umi_inhouse_gene <- umi_inhouse_bin[,s1] + umi_inhouse_bin[,s2] + umi_inhouse_bin[,s3]
+colnames(umi_inhouse_gene)<-c("Bcl11a", "Gata3", "Hoxa9", "Meis1", "Spi1", "Tcf7", "Erg")
+par(mfrow=c(2,4))
+
+for (i in 1:length(s1)) {
+  barplot(table(umi_inhouse_gene[,i]), main=colnames(umi_inhouse_gene)[i], xlab="gRNA sites per cell", ylab="cell number", log="y")
+}
+mtext("gRNA gene target sites analysis (scperturb_tool, g1)", outer = TRUE)
+
+umi_cellranger_gene_subset <- umi_cellranger_gene[umi_cellranger_gene$Bcl11a>1 | umi_cellranger_gene$Gata3>1 | umi_cellranger_gene$Hoxa9>1 | umi_cellranger_gene$Meis1>1 | umi_cellranger_gene$Spi1>1 | umi_cellranger_gene$Tcf7>1 | umi_cellranger_gene$Erg>1,]
+
+umi_inhouse_gene_subset <- umi_inhouse_gene[umi_inhouse_gene$Bcl11a>1 | umi_inhouse_gene$Gata3>1 | umi_inhouse_gene$Hoxa9>1 | umi_inhouse_gene$Meis1>1 | umi_inhouse_gene$Spi1>1 | umi_inhouse_gene$Tcf7>1 | umi_inhouse_gene$Erg>1,]
+
+overlap<-intersect(rownames(umi_cellranger_gene_subset), rownames(umi_inhouse_gene_subset))
+umi_cellranger_gene_subset_overlap <- umi_cellranger_gene_subset[overlap,]
+umi_inhouse_gene_subset_overlap <- umi_inhouse_gene_subset[overlap,]
+
+
+umi_cellranger_gene_subset_overlap_trans <- data.frame(umi_cellranger_gene_subset_overlap) %>% gather(variable, value)
+umi_inhouse_gene_subset_overlap_trans <- data.frame(umi_inhouse_gene_subset_overlap) %>% gather(variable, value)
+umi_gene_subset_overlap_trans <- cbind(umi_cellranger_gene_subset_overlap_trans, umi_inhouse_gene_subset_overlap_trans)
+colnames(umi_gene_subset_overlap_trans) <- c("gene_cellranger","umi_cellranger","gene_scperturb_tool","umi_scperturb_tool")
+#_nonzero <- umi_gene_subset_overlap_trans[umi_gene_subset_overlap_trans$umi_cellranger>0 | umi_gene_subset_overlap_trans$umi_scperturb_tool>0, ]
+
+umi_gene_subset_overlap_trans_sel <- umi_gene_subset_overlap_trans[umi_gene_subset_overlap_trans$umi_cellranger>1 & umi_gene_subset_overlap_trans$umi_scperturb_tool>1,]
+
+barplot(table(umi_gene_subset_overlap_trans_sel$gene_cellranger), main="Cells with multiple sites per gene (cellranger:83, scperturb_tool:81)", xlab="gRNA target gene", ylab="cell count with consistent dual sites")
+
+#umi_cellranger_cofreq<-rowSums(umi_cellranger_order>0)
+#umi_cellranger_cofreq_dist<-data.frame(table(umi_cellranger_cofreq))
+#colnames(umi_cellranger_cofreq_dist)<-c("gRNA_site_per_cell", "cell_count")
+#umi_cellranger_cofreq_dist$pipeline<-rep("cellranger", nrow(umi_cellranger_cofreq_dist))
+
+#umi_inhouse_cofreq<-rowSums(umi_inhouse_order>0)
+#umi_inhouse_cofreq_dist<-data.frame(table(umi_inhouse_cofreq))
+#colnames(umi_inhouse_cofreq_dist)<-c("gRNA_site_per_cell", "cell_count")
+#umi_inhouse_cofreq_dist$pipeline<-rep("scperturb_tool", nrow(umi_inhouse_cofreq_dist))
+
+#umi_cofreq_dist<-rbind(umi_cellranger_cofreq_dist, umi_inhouse_cofreq_dist)
+
+#ggplot(umi_cofreq_dist, aes(x=gRNA_site_per_cell, y=cell_count, fill=pipeline)) + geom_bar(stat="identity", position=position_dodge())
+
+
+```
+
+
+```{r}
+setwd("/home/fgao/Data_single_cell/Rothenberg_Lab/perturb_data/ft_gRNA/outs/crispr_analysis/")
+umi_cellranger<-read.table("protospacer_umi.txt", header=T, row.names=1)
+rownames(umi_cellranger)<-substring(rownames(umi_cellranger), 1,16)
+umi_inhouse<-read.table("../../../guiderna/ft_count_cap2_gd2_id_convert.txt", header=T, row.names=1)
+
+umi_cellranger_order <- umi_cellranger[order(row.names(umi_cellranger)), ]
+umi_inhouse_order <- umi_inhouse[order(row.names(umi_inhouse)), ]
+
+mycorr<-cor(umi_cellranger_order[,c(25:47)], umi_inhouse_order[,c(1:23)])
+
+library(gplots)
+my_palette <- colorRampPalette(c("green", "yellow", "red"))(n = 99)
+col_breaks = seq(0,1,length=100)
+
+library(dplyr)
+library(tidyr)
+library(plotly)
+
+#mycorr_transform <- data.frame(mycorr) %>% gather(variable, value)
+#png("/home/fgao/Data_single_cell/Rothenberg_Lab/perturb_data/ft_gRNA/outs/crispr_analysis/heatmap_umi_corr.png")
+plot_ly(x = colnames(mycorr), y = rownames(mycorr), z = mycorr, type = "heatmap") %>% layout(title = "Pearson's Correlation of UMI counts", xaxis = list(title = 'guiderna_tool'), yaxis = list(title = "cellranger"))
+
+#dev.off()
+#ggplot2::ggsave(filename = "heatmap_umi_corr.png", plot = plot_heatmap, width=18, height=18)
+
+umi_cellranger_trans <- data.frame(umi_cellranger_order[,25:47]) %>% gather(variable, value)
+umi_inhouse_trans <- data.frame(umi_inhouse_order[,1:23]) %>% gather(variable, value)
+umi_trans <- cbind(umi_cellranger_trans, umi_inhouse_trans)
+colnames(umi_trans) <- c("guide_cellranger","umi_cellranger","guide_guiderna_tool","umi_guiderna_tool")
+umi_trans_nonzero <- umi_trans[umi_trans$umi_cellranger>0 | umi_trans$umi_guiderna_tool>0, ]
+
+ggplot(umi_trans_nonzero, aes(x=umi_guiderna_tool, y=umi_cellranger) ) +
+  geom_bin2d(bins = 100) +
+  scale_fill_continuous(type = "viridis") +
+  theme_bw() + ggtitle(paste("Correlation of individual guide UMIs at single-cell level (pearson's r = ", formatC(cor(umi_trans_nonzero$umi_cellranger, umi_trans_nonzero$umi_guiderna_tool),format='f',digits=3), ")", sep=""))
+
+sum(umi_trans_nonzero$umi_cellranger)
+sum(umi_trans_nonzero$umi_guiderna_tool)
+
+#umi_cellranger_cofreq<-rowSums(umi_cellranger_order>0)
+#umi_cellranger_cofreq_dist<-data.frame(table(umi_cellranger_cofreq))
+#colnames(umi_cellranger_cofreq_dist)<-c("gRNA_site_per_cell", "cell_count")
+#umi_cellranger_cofreq_dist$pipeline<-rep("cellranger", nrow(umi_cellranger_cofreq_dist))
+
+#umi_inhouse_cofreq<-rowSums(umi_inhouse_order>0)
+#umi_inhouse_cofreq_dist<-data.frame(table(umi_inhouse_cofreq))
+#colnames(umi_inhouse_cofreq_dist)<-c("gRNA_site_per_cell", "cell_count")
+#umi_inhouse_cofreq_dist$pipeline<-rep("scperturb_tool", nrow(umi_inhouse_cofreq_dist))
+
+#umi_cofreq_dist<-rbind(umi_cellranger_cofreq_dist, umi_inhouse_cofreq_dist)
+
+#ggplot(umi_cofreq_dist, aes(x=gRNA_site_per_cell, y=cell_count, fill=pipeline)) + geom_bar(stat="identity", position=position_dodge())
+
+```
+
+
+# plots of g1,g2 correlation
+
+```{r}
+setwd("/home/fgao/Data_single_cell/Rothenberg_Lab/perturb_data/ft_gRNA/outs/crispr_analysis/")
+umi_cellranger<-read.table("protospacer_umi.txt", header=T, row.names=1)
+rownames(umi_cellranger)<-substring(rownames(umi_cellranger), 1,16)
+umi_inhouse1<-read.table("../../../guiderna/ft_count_cap1_gd1_id_convert.txt", header=T, row.names=1)
+umi_inhouse2<-read.table("../../../guiderna/ft_count_cap2_gd2_id_convert.txt", header=T, row.names=1)
+umi_inhouse<-cbind(umi_inhouse1, umi_inhouse2)
+
+umi_cellranger_order <- umi_cellranger[order(row.names(umi_cellranger)), ]
+umi_inhouse_order <- umi_inhouse[order(row.names(umi_inhouse)), ]
+
+mycorr_cellranger<-cor(umi_cellranger_order[,c(1:21)], umi_cellranger_order[,c(25:45)])
+mycorr_inhouse<-cor(umi_inhouse_order[,c(1:21)], umi_inhouse_order[,c(25:45)])
+
+library(gplots)
+my_palette <- colorRampPalette(c("green", "yellow", "red"))(n = 99)
+col_breaks = seq(0,1,length=100)
+
+library(dplyr)
+library(tidyr)
+library(plotly)
+
+plot_ly(x = colnames(mycorr_cellranger), y = rownames(mycorr_cellranger), z = mycorr_cellranger, type = "heatmap") %>% layout(title = "Pearson's Correlation of UMI counts (cellranger)", xaxis = list(title = 'guide2'), yaxis = list(title = "guide1"))
+
+plot_ly(x = colnames(mycorr_inhouse), y = rownames(mycorr_inhouse), z = mycorr_inhouse, type = "heatmap") %>% layout(title = "Pearson's Correlation of UMI counts (guiderna_tool)", xaxis = list(title = 'guide2'), yaxis = list(title = "guide1"))
+
+
+
+
+umi_cellranger_trans <- data.frame(umi_cellranger_order[,1:23]) %>% gather(variable, value)
+umi_inhouse_trans <- data.frame(umi_inhouse_order[,1:23]) %>% gather(variable, value)
+umi_trans <- cbind(umi_cellranger_trans, umi_inhouse_trans)
+colnames(umi_trans) <- c("guide_cellranger","umi_cellranger","guide_scperturb_tool","umi_scperturb_tool")
+umi_trans_nonzero <- umi_trans[umi_trans$umi_cellranger>0 | umi_trans$umi_scperturb_tool>0, ]
+
+ggplot(umi_trans_nonzero, aes(x=umi_scperturb_tool, y=umi_cellranger) ) +
+  geom_bin2d(bins = 100) +
+  scale_fill_continuous(type = "viridis") +
+  theme_bw() + ggtitle(paste("Correlation of individual guide UMIs at single-cell level (pearson's r = ", formatC(cor(umi_trans_nonzero$umi_cellranger, umi_trans_nonzero$umi_scperturb_tool),format='f',digits=3), ")", sep=""))
+
+
+```
+
+
+# Generate binary tables for g1 & g2
+
+```{r}
+library(MASS)
+library(mclust, quietly=TRUE)
+library(sBIC)
+
+feature_binary<-function(ft_count){
+  ft_count_log<-log10(ft_count + 1)
+  ft_count_binary<-ft_count
+    for (i in 1:ncol(ft_count)) {
+      if(sum(ft_count[,i])>=1){
+        fit <- Mclust(ft_count_log[,i], G=2)
+        fit$parameters
+        if(!is.null(fit)) {ft_count_binary[,i]<-fit$classification} else {ft_count_binary[,i] = rep(0,nrow(ft_count_log))}
+      } else {ft_count_binary[,i] = rep(0,nrow(ft_count_log))}
+      
+    }
+    ft_count_binary[ft_count_binary==1] <- 0
+    ft_count_binary[ft_count_binary==2] <- 1
+    return(ft_count_binary)
+}
+
+setwd("/home/fgao/Data_single_cell/Rothenberg_Lab/perturb_data/ft_gRNA/outs/crispr_analysis/")
+umi_inhouse1<-read.table("../../../guiderna/ft_count_cap1_gd1_id_convert.txt", header=T, row.names=1)
+umi_inhouse2<-read.table("../../../guiderna/ft_count_cap2_gd2_id_convert.txt", header=T, row.names=1)
+
+umi_inhouse1_bin <- feature_binary(umi_inhouse1)
+umi_inhouse2_bin <- feature_binary(umi_inhouse2)
+
+write.table(umi_inhouse1_bin, file="../../../guiderna/ft_count_cap1_gd1_id_convert_bin.txt", quote=F, row.names=T, col.names=T)
+write.table(umi_inhouse2_bin, file="../../../guiderna/ft_count_cap2_gd2_id_convert_bin.txt", quote=F, row.names=T, col.names=T)
+
+umi_inhouse_cross<-umi_inhouse1_bin[,c(1:21)]*umi_inhouse2_bin[,c(1:21)]
+
+umi_inhouse_cross_count<-colSums(umi_inhouse_cross)
+barplot(umi_inhouse_cross_count, main="Cells with both g1 & g2 detected (scperturb_tool)", xlab="", ylab="cell count with consistent dual sites", las=2, ylim=c(0,500))
+
+setwd("/home/fgao/Data_single_cell/Rothenberg_Lab/perturb_data/ft_gRNA/outs/crispr_analysis/")
+umi_cellranger<-read.table("protospacer_umi.txt", header=T, row.names=1)
+rownames(umi_cellranger)<-substring(rownames(umi_cellranger), 1,16)
+
+umi_cellranger1_bin <- feature_binary(umi_cellranger[,c(1:24)])
+umi_cellranger2_bin <- feature_binary(umi_cellranger[,c(25:47)])
+
+write.table(umi_cellranger1_bin, file="ft_count_cellranger_gd1_bin.txt", quote=F, row.names=T, col.names=T)
+write.table(umi_cellranger2_bin, file="ft_count_cellranger_gd2_bin.txt", quote=F, row.names=T, col.names=T)
+
+umi_cellranger_cross<-umi_cellranger1_bin[,c(1:21)]*umi_cellranger2_bin[,c(1:21)]
+
+umi_cellranger_cross_count<-colSums(umi_cellranger_cross)
+barplot(umi_cellranger_cross_count, main="Cells with both g1 & g2 detected (cellranger)", xlab="", ylab="cell count with consistent dual sites", las=2, ylim=c(0,500))
+
+```
+
+
+# correlation with hashtag (MOI)
+
+```{r}
+setwd("/home/fgao/Data_single_cell/Rothenberg_Lab/perturb_data/guiderna/")
+
+g1_inhouse_bin<-read.table("ft_count_cap1_gd1_id_convert_bin.txt", header=T, row.names=1)
+g2_inhouse_bin<-read.table("ft_count_cap2_gd2_id_convert_bin.txt", header=T, row.names=1)
+hashtag_bin<-read.table("../hashtag/ft_count_perturb_binary.txt", header=T, row.names=1)
+g_inhouse_bin<-cbind(g1_inhouse_bin, g2_inhouse_bin)
+guides_hashtag<-merge(g_inhouse_bin, hashtag_bin, by.x=0, by.y=0)
+guides_hashtag_sel1<-guides_hashtag[guides_hashtag$ACCCACCAGTAAGAC==1,c(2:22,26:46)]
+#guides_hashtag_sel1$id <- rep("g1_MOI1", nrow(guides_hashtag_sel1))
+guides_hashtag_sel2<-guides_hashtag[guides_hashtag$GGTCGAGAGCATTCA==1,c(2:22,26:46)]
+#guides_hashtag_sel2$id <- rep("g1_MOI0.5", nrow(guides_hashtag_sel2))
+guides_hashtag_sel3<-guides_hashtag[guides_hashtag$CTTGCCGCATGTCAT==1,c(2:22,26:46)]
+#guides_hashtag_sel3$id <- rep("g2_MOI1", nrow(guides_hashtag_sel3))
+guides_hashtag_sel4<-guides_hashtag[guides_hashtag$AAAGCATTCTTCACG==1,c(2:22,26:46)]
+#guides_hashtag_sel4$id <- rep("g2_MOI0.5", nrow(guides_hashtag_sel4))
+guides_hashtag_sel5<-guides_hashtag[guides_hashtag$TATGCTGCCACGGTA==1,c(2:22,26:46)]
+#guides_hashtag_sel5$id <- rep("g1_MOI0.5_96wp", nrow(guides_hashtag_sel5))
+guides_hashtag_comb<-data.frame(rbind(colSums(guides_hashtag_sel1)/nrow(guides_hashtag_sel1), colSums(guides_hashtag_sel2)/nrow(guides_hashtag_sel2), colSums(guides_hashtag_sel3)/nrow(guides_hashtag_sel3), colSums(guides_hashtag_sel4)/nrow(guides_hashtag_sel4), colSums(guides_hashtag_sel5)/nrow(guides_hashtag_sel5)))
+
+guides_hashtag_comb$id<-c("p1_MOI1", "p1_MOI0.5", "p2_MOI1", "p2_MOI0.5", "p1_MOI0.5_96wp")
+  
+#for (i in 1:ncol(guides_hashtag_comb))
+#{
+#  ggplot(guides_hashtag_comb, aes(x=id, y=cell_count, fill=pipeline)) + geom_bar(stat="identity", position=position_dodge())
+#  }
+
+  
+```
+
+
+# single-cell RNASeq part, modified from Wen's notebook
+```{r}
+perturbseq.data <- Read10X(data.dir="/home/fgao/Data_single_cell/Rothenberg_Lab/perturb_data/cellranger_out/cellranger3_FT-SE6382_v3_out/outs/filtered_feature_bc_matrix")
+
+perturbseq_10x <- CreateSeuratObject(perturbseq.data, min.cells = 3,
+    project = "10X_Perturbseq", min.features = 1300)
+
+
+df<-read.table("/home/fgao/Data_single_cell/Rothenberg_Lab/perturb_data/hashtag/ft_count_perturb_binary.txt")
+inds <- which(rowSums(df)>=2)
+inds_0 <- which(rowSums(df)==0)
+df$tranformed <- toupper(names(df)[max.col(df)])
+df$tranformed[inds] <- 'multi'
+df$tranformed[inds_0] <- 'unknown'
+df$tranformed[df$tranformed == "ACCCACCAGTAAGAC"] <- "pool1_MOI=1"
+df$tranformed[df$tranformed == "GGTCGAGAGCATTCA"] <- "pool1_MOI=0.5"
+df$tranformed[df$tranformed == "CTTGCCGCATGTCAT"] <- "pool2_MOI=1"
+df$tranformed[df$tranformed == "AAAGCATTCTTCACG"] <- "pool2_MOI=0.5"
+#df$tranformed[df$tranformed == "CTTTGTCTTTGTGAG"] <- "D13_FF_1"
+df$tranformed[df$tranformed == "TATGCTGCCACGGTA"] <- "pool1_MOI=0.5_96wp"
+#df$tranformed[df$tranformed == "GAGTCTGCCAGTATC"] <- "D13_FF_3"
+#df$tranformed[df$tranformed == "TATAGAACGCCAGGC"] <- "D13_WT_4"
+df2<- as.data.frame(df[,"tranformed"])
+rownames(df2)<-rownames(df)
+
+```
+
+
+
+```{r}
+perturbseq.hto <- read.csv("~/Dropbox/Perturbation/retro_perturbseq/perturbseq_run1/meta.csv", header = T)
+perturbseq.hto$X<-paste0(perturbseq.hto$X,"-1")
+rownames(perturbseq.hto)<-perturbseq.hto$X
+colnames(perturbseq.hto)<-c("cell_barcode","sample_id")
+meta<-merge(perturbseq.hto,df,by.x = "cell_barcode", by.y = "CELL_barcode")
+rownames(meta)<-meta$cell_barcode
+#write.csv(meta, "~/Dropbox/Perturbation/retro_perturbseq/perturbseq_run1/meta_inhouse_hash_gRNA.csv")
+```
+

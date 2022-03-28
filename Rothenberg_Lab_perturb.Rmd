@@ -1,0 +1,245 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+
+setwd("/home/fgao/Data_Rothenberg/")
+
+deg_Bcl11a<-read.table("diff_Bcl11a.txt", header=T, sep="\t", row.names=1)
+deg_Erg<-read.table("diff_Erg.txt", header=T, sep="\t", row.names=1)
+deg_Gata3<-read.table("diff_Gata3.txt", header=T, sep="\t", row.names=1)
+deg_Hoxa9<-read.table("diff_Hoxa9.txt", header=T, sep="\t", row.names=1)
+deg_Meis1<-read.table("diff_Meis1.txt", header=T, sep="\t", row.names=1)
+deg_Spi1<-read.table("diff_Spi1.txt", header=T, sep="\t", row.names=1)
+deg_Tcf7<-read.table("diff_Tcf7.txt", header=T, sep="\t", row.names=1)
+
+deg_Bcl11a_up<-rownames(deg_Bcl11a[deg_Bcl11a$avg_lnFC>0, ])
+deg_Bcl11a_dn<-rownames(deg_Bcl11a[deg_Bcl11a$avg_lnFC<0, ])
+
+deg_Erg_up<-rownames(deg_Erg[deg_Erg$avg_lnFC>0, ])
+deg_Erg_dn<-rownames(deg_Erg[deg_Erg$avg_lnFC<0, ])
+
+deg_Gata3_up<-rownames(deg_Gata3[deg_Gata3$avg_lnFC>0, ])
+deg_Gata3_dn<-rownames(deg_Gata3[deg_Gata3$avg_lnFC<0, ])
+
+deg_Hoxa9_up<-rownames(deg_Hoxa9[deg_Hoxa9$avg_lnFC>0, ])
+deg_Hoxa9_dn<-rownames(deg_Hoxa9[deg_Hoxa9$avg_lnFC<0, ])
+
+deg_Meis1_up<-rownames(deg_Meis1[deg_Meis1$avg_lnFC>0, ])
+deg_Meis1_dn<-rownames(deg_Meis1[deg_Meis1$avg_lnFC<0, ])
+
+deg_Spi1_up<-rownames(deg_Spi1[deg_Spi1$avg_lnFC>0, ])
+deg_Spi1_dn<-rownames(deg_Spi1[deg_Spi1$avg_lnFC<0, ])
+
+deg_Tcf7_up<-rownames(deg_Tcf7[deg_Tcf7$avg_lnFC>0, ])
+deg_Tcf7_dn<-rownames(deg_Tcf7[deg_Tcf7$avg_lnFC<0, ])
+
+gene_table<-data.frame(tf_ko=c(rep("KO_Bcl11a_up", length(deg_Bcl11a_up)), rep("KO_Bcl11a_dn", length(deg_Bcl11a_dn)),
+                                rep("KO_Erg_up", length(deg_Erg_up)), rep("KO_Erg_dn", length(deg_Erg_dn)),
+                                rep("KO_Gata3_up", length(deg_Gata3_up)), rep("KO_Gata3_dn", length(deg_Gata3_dn)),
+                                rep("KO_Hoxa9_up", length(deg_Hoxa9_up)), rep("KO_Hoxa9_dn", length(deg_Hoxa9_dn)),
+                                rep("KO_Meis1_up", length(deg_Meis1_up)), rep("KO_Meis1_dn", length(deg_Meis1_dn)),
+                                rep("KO_Spi1_up", length(deg_Spi1_up)), rep("KO_Spi1_dn", length(deg_Spi1_dn)),
+                                rep("KO_Tcf7_up", length(deg_Tcf7_up)), rep("KO_Tcf7_dn", length(deg_Tcf7_dn))
+                                ), 
+                       targets=c(deg_Bcl11a_up, deg_Bcl11a_dn, deg_Erg_up, deg_Erg_dn, deg_Gata3_up, deg_Gata3_dn,
+                                 deg_Hoxa9_up, deg_Hoxa9_dn, deg_Meis1_up, deg_Meis1_dn, deg_Spi1_up, deg_Spi1_dn,
+                                 deg_Tcf7_up, deg_Tcf7_dn))
+
+gene_table$value<-rep(1, nrow(gene_table))
+
+library(reshape2)
+gene_matrix<-dcast(gene_table, targets~tf_ko, value.var="value")
+gene_matrix[is.na(gene_matrix)] <- 0
+rownames(gene_matrix)<-gene_matrix[,1]
+gene_matrix<-gene_matrix[,-1]
+
+#library(UpSetR)
+library(ComplexHeatmap)
+list1<-list(KO_Bcl11a_dn=deg_Bcl11a_dn, KO_Bcl11a_up=deg_Bcl11a_up,
+            KO_Erg_dn=deg_Erg_dn, KO_Erg_up=deg_Erg_up,
+            KO_Gata3_dn=deg_Gata3_dn, KO_Gata3_up=deg_Gata3_up,
+            KO_Hoxa9_dn=deg_Hoxa9_dn, KO_Hoxa9_up=deg_Hoxa9_up,
+            KO_Meis1_dn=deg_Meis1_dn, KO_Meis1_up=deg_Meis1_up,
+            KO_Spi1_dn=deg_Spi1_dn, KO_Spi1_up=deg_Spi1_up,
+            KO_Tcf7_dn=deg_Tcf7_dn, KO_Tcf7_up=deg_Tcf7_up
+            )
+m = make_comb_mat(list1)
+#plot_upset<-UpSet(m[1:78])
+plot_upset<-UpSet(m[1:50])
+#plot_upset<-upset(gene_matrix, sets = colnames(gene_matrix), scale.intersections = "log10", text.scale=1.5, show.numbers = "no") #scale.sets="log10", 
+
+#plot_upset<-upset(fromList(list1), sets = colnames(gene_matrix), text.scale=1.5)
+#plot_upset
+
+svg("/home/fgao/Data_Rothenberg/upset_plot_deg.svg")
+plot_upset
+dev.off()
+  
+png("/home/fgao/Data_Rothenberg/upset_plot_deg.png", width=800, height=600)
+plot_upset
+dev.off()
+  
+
+# run pair-wise overlap statistics
+table_pvalue_all<-data.frame(ko_tf1=character(), ko_tf2=character(), pvalue=double(), overlap_count=integer(), overlap_genes=character())
+
+calc_overlap<-function(set1, set2, total)
+  {n_tot<-total
+   n_set1<-length(set1)
+   n_set2<-length(set2)
+   n_pp<-length(intersect(set1, set2))
+   n_nn<-n_tot-(n_set1+n_set2-n_pp)
+   n_pn<-n_set1-n_pp
+   n_np<-n_set2-n_pp
+   matri1=matrix(c(n_nn, n_pn, n_np, n_pp),nrow=2)
+   #stat1=fisher.test(matri1,alternative="two.sided")
+   stat1=fisher.test(matri1,alternative="greater")
+   result1=stat1$p.value
+   result2=n_pp
+   result3=paste(intersect(set1, set2), collapse=",")
+   result=list(result1, result2, result3)
+   return(result)
+}
+
+setwd("/home/fgao/Data_Rothenberg/")
+ntot<-31053
+
+for (list1 in c("Bcl11a", "Erg", "Gata3", "Hoxa9", "Meis1", "Spi1", "Tcf7"))
+{
+  for (list2 in c("Bcl11a", "Erg", "Gata3", "Hoxa9", "Meis1", "Spi1", "Tcf7"))
+  {
+  if(list1!=list2)
+    {
+      diff1<-read.table(paste("diff_", list1, ".txt", sep=""), header=T, row.names=1)
+      diff1_up<-rownames(diff1[diff1$avg_lnFC>0,])
+      diff1_dn<-rownames(diff1[diff1$avg_lnFC<0,])
+      diff2<-read.table(paste("diff_", list2, ".txt", sep=""), header=T, row.names=1)
+      diff2_up<-rownames(diff2[diff2$avg_lnFC>0,])
+      diff2_dn<-rownames(diff2[diff2$avg_lnFC<0,])
+  
+      p_l1_up_l2_up<-calc_overlap(diff1_up, diff2_up, ntot)
+      p_l1_up_l2_dn<-calc_overlap(diff1_up, diff2_dn, ntot)
+      p_l1_dn_l2_up<-calc_overlap(diff1_dn, diff2_up, ntot)
+      p_l1_dn_l2_dn<-calc_overlap(diff1_dn, diff2_dn, ntot)
+  
+      table_pvalue<-data.frame(ko_tf1=c(paste(list1,"_UP", sep=""),
+                                    paste(list1,"_UP", sep=""),
+                                    paste(list1,"_DN", sep=""),
+                                    paste(list1,"_DN", sep="")
+                                    ),
+                           ko_tf2=c(paste(list2,"_UP", sep=""),
+                                    paste(list2,"_DN", sep=""),
+                                    paste(list2,"_UP", sep=""),
+                                    paste(list2,"_DN", sep="")
+                                    ),
+                           pvalue=c(p_l1_up_l2_up[[1]], p_l1_up_l2_dn[[1]], p_l1_dn_l2_up[[1]], p_l1_dn_l2_dn[[1]]), 
+                           overlap_count=c(p_l1_up_l2_up[[2]], p_l1_up_l2_dn[[2]], p_l1_dn_l2_up[[2]], p_l1_dn_l2_dn[[2]]),
+                           overlap_genes=c(p_l1_up_l2_up[[3]], p_l1_up_l2_dn[[3]], p_l1_dn_l2_up[[3]], p_l1_dn_l2_dn[[3]]))
+      table_pvalue_all<-rbind(table_pvalue_all, table_pvalue)
+    }
+  }
+}
+
+
+heat<-ggplot(table_pvalue_all, aes(ko_tf1, ko_tf2, fill=-log10(pvalue)))+ geom_tile() + scale_fill_gradient2(low="blue", mid="white", high="red", midpoint=0) + theme(text = element_text(size = 14)) + ggtitle("DEG overlap statistics")  + theme(axis.text.x=element_text(angle=45, hjust=1))
+heat
+
+setwd("/home/fgao/Data_Rothenberg/")
+
+svg("heatmap_fisher_test.svg")
+heat
+dev.off()
+
+png("heatmap_fisher_test.png", width=350, height=600)
+heat
+dev.off()
+
+
+write.table(table_pvalue_all, file="overlap_statistics_neurological_disorders.txt", quote=F, row.names=F, sep="\t")
+
+
+```
+
+
+
+```{r}
+
+library(ComplexUpset)
+
+setwd("/home/fgao/Data_Rothenberg/")
+
+deg_Bcl11a<-read.table("diff_Bcl11a.txt", header=T, sep="\t", row.names=1)
+deg_Erg<-read.table("diff_Erg.txt", header=T, sep="\t", row.names=1)
+deg_Gata3<-read.table("diff_Gata3.txt", header=T, sep="\t", row.names=1)
+deg_Hoxa9<-read.table("diff_Hoxa9.txt", header=T, sep="\t", row.names=1)
+deg_Meis1<-read.table("diff_Meis1.txt", header=T, sep="\t", row.names=1)
+deg_Spi1<-read.table("diff_Spi1.txt", header=T, sep="\t", row.names=1)
+deg_Tcf7<-read.table("diff_Tcf7.txt", header=T, sep="\t", row.names=1)
+deg_all<-read.table("diff_all.txt", header=T, sep="\t", row.names=1)
+
+deg_Bcl11a_up<-rownames(deg_Bcl11a[deg_Bcl11a$avg_lnFC>0, ])
+deg_Bcl11a_dn<-rownames(deg_Bcl11a[deg_Bcl11a$avg_lnFC<0, ])
+
+deg_Erg_up<-rownames(deg_Erg[deg_Erg$avg_lnFC>0, ])
+deg_Erg_dn<-rownames(deg_Erg[deg_Erg$avg_lnFC<0, ])
+
+deg_Gata3_up<-rownames(deg_Gata3[deg_Gata3$avg_lnFC>0, ])
+deg_Gata3_dn<-rownames(deg_Gata3[deg_Gata3$avg_lnFC<0, ])
+
+deg_Hoxa9_up<-rownames(deg_Hoxa9[deg_Hoxa9$avg_lnFC>0, ])
+deg_Hoxa9_dn<-rownames(deg_Hoxa9[deg_Hoxa9$avg_lnFC<0, ])
+
+deg_Meis1_up<-rownames(deg_Meis1[deg_Meis1$avg_lnFC>0, ])
+deg_Meis1_dn<-rownames(deg_Meis1[deg_Meis1$avg_lnFC<0, ])
+
+deg_Spi1_up<-rownames(deg_Spi1[deg_Spi1$avg_lnFC>0, ])
+deg_Spi1_dn<-rownames(deg_Spi1[deg_Spi1$avg_lnFC<0, ])
+
+deg_Tcf7_up<-rownames(deg_Tcf7[deg_Tcf7$avg_lnFC>0, ])
+deg_Tcf7_dn<-rownames(deg_Tcf7[deg_Tcf7$avg_lnFC<0, ])
+
+deg_Tcf7_up<-rownames(deg_Tcf7[deg_Tcf7$avg_lnFC>0, ])
+deg_Tcf7_dn<-rownames(deg_Tcf7[deg_Tcf7$avg_lnFC<0, ])
+
+
+gene_table<-data.frame(tf_ko=c(rep("Bcl11a_up", length(deg_Bcl11a_up)), rep("Bcl11a_dn", length(deg_Bcl11a_dn)),
+                                rep("Erg_up", length(deg_Erg_up)), rep("Erg_dn", length(deg_Erg_dn)),
+                                rep("Gata3_up", length(deg_Gata3_up)), rep("Gata3_dn", length(deg_Gata3_dn)),
+                                rep("Hoxa9_up", length(deg_Hoxa9_up)), rep("Hoxa9_dn", length(deg_Hoxa9_dn)),
+                                rep("Meis1_up", length(deg_Meis1_up)), rep("Meis1_dn", length(deg_Meis1_dn)),
+                                rep("Spi1_up", length(deg_Spi1_up)), rep("Spi1_dn", length(deg_Spi1_dn)),
+                                rep("Tcf7_up", length(deg_Tcf7_up)), rep("Tcf7_dn", length(deg_Tcf7_dn))
+                                ), 
+                       targets=c(deg_Bcl11a_up, deg_Bcl11a_dn, deg_Erg_up, deg_Erg_dn, deg_Gata3_up, deg_Gata3_dn,
+                                 deg_Hoxa9_up, deg_Hoxa9_dn, deg_Meis1_up, deg_Meis1_dn, deg_Spi1_up, deg_Spi1_dn,
+                                 deg_Tcf7_up, deg_Tcf7_dn))
+
+gene_table$value<-rep(1, nrow(gene_table))
+
+library(reshape2)
+gene_matrix<-dcast(gene_table, targets~tf_ko, value.var="value")
+gene_matrix[is.na(gene_matrix)] <- 0
+rownames(gene_matrix)<-gene_matrix[,1]
+gene_matrix<-gene_matrix[,-1]
+gene_matrix<-as.data.frame(gene_matrix==1)
+
+figure_upset<-upset(gene_matrix, colnames(gene_matrix), name='overlap of DEG', width_ratio=0.1, min_degree=2, set_sizes=upset_set_size() + scale_y_continuous(trans=reverse_log_trans(), labels=log10), stripes=c('blue', 'red', 'blue', 'red', 'blue', 'red', 'red', 'blue', 'red', 'blue', 'red', 'blue', 'red')
+        )
+        
+figure_upset
+
+png("/home/fgao/Data_Rothenberg/upset_plot_deg_overlap.png", width=900, height=600)
+figure_upset
+dev.off()
+  
+svg("/home/fgao/Data_Rothenberg/upset_plot_deg_overlap.svg", width=900, height=450)
+figure_upset
+dev.off()
+  
+stat_upset<-upset_test(gene_matrix, c("Tcf7_dn", "Tcf7_up"))
+                       
+```
+
