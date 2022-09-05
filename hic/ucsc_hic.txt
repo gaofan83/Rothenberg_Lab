@@ -1,0 +1,4 @@
+track type=hic name="Bcl11bKO1" bigDataUrl=http://bioinformatics.caltech.edu/events/Ellen/Bcl11bKO1_DN2.hic
+track type=hic name="Bcl11bKO2" bigDataUrl=http://bioinformatics.caltech.edu/events/Ellen/Bcl11bKO2_DN2.hic
+track type=hic name="WT1" bigDataUrl=http://bioinformatics.caltech.edu/events/Ellen/WT1_DN2.hic
+track type=hic name="WT2" bigDataUrl=http://bioinformatics.caltech.edu/events/Ellen/WT2_DN2.hic
